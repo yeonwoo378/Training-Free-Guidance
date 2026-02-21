@@ -1,12 +1,12 @@
-CUDA_VISIBLE_DEVICES=0
+CUDA_VISIBLE_DEVICES=1
 data_type=image
 image_size=256
-dataset="imagenet"
-model_name_or_path='models/openai_imagenet.pt'
+dataset="celebahq"
+model_name_or_path='google/ddpm-ema-celebahq-256'
 
-task=label_guidance
-guide_network='google/vit-base-patch16-224'
-target=111
+task="label_guidance+label_guidance"
+guide_network="nateraw/vit-age-classifier+rizvandwiki/gender-classification-2"
+target="0+0"
 
 train_steps=1000
 inference_steps=100
@@ -14,16 +14,16 @@ eta=1.0
 clip_x0=True
 seed=42
 logging_dir='logs'
-per_sample_batch_size=2
-num_samples=2
+per_sample_batch_size=16
+num_samples=256
 logging_resolution=512
 guidance_name='tfg'
-eval_batch_size=2
+eval_batch_size=16
 wandb=False
 
-rho=2
-mu=0.5
-sigma=0.1
+rho=0.5
+mu=8
+sigma=1
 eps_bsz=1
 iter_steps=4
 
@@ -32,13 +32,13 @@ CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES python main.py \
     --task $task \
     --image_size $image_size \
     --dataset $dataset \
+    --iter_steps $iter_steps \
     --guide_network $guide_network \
     --logging_resolution $logging_resolution \
     --model_name_or_path $model_name_or_path \
     --train_steps $train_steps \
     --inference_steps $inference_steps \
     --target $target \
-    --iter_steps $iter_steps \
     --eta $eta \
     --clip_x0 $clip_x0 \
     --rho $rho \

@@ -6,3 +6,8 @@ wandb
 sweep_*
 __pycache__
 logs
+
+data/celeba_hq_256/
+data/cifar-10-batches-py/
+data/cifar-10-python.tar.gz
+*.pt

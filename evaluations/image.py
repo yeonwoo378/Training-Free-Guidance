@@ -191,6 +191,7 @@ class ImageEvaluator(BaseEvaluator):
         metrics['inception_score'] = inception_score
 
         # we only allow combined guidance within the same dataset
+        cache_path = None
         if self.args.dataset in ['imagenet', 'cifar10', 'cat']:
             if self.args.dataset == 'imagenet':
                 cache_path = IMAGENET_STATISTICS_PATH['+'.join([str(x) for x in self.args.targets])]

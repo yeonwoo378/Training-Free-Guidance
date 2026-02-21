@@ -31,7 +31,9 @@ class BasePipeline(object):
     @abstractmethod
     def sample(self, sample_size: int):
         
-        samples = self.check_done_and_load_sample()
+        # this makes resue the previous results, often ignore the sample size
+        # samples = self.check_done_and_load_sample()
+        samples = None
         
         if samples is None:
 

@@ -1,13 +1,14 @@
 # PLEASE CHANGE THEM TO YOUR OWN PATHs BEFORE RUNNING !!
-IMAGENET_PATH="/nfs-shared/haowei/sharing/imagenet-1k"
+IMAGENET_PATH="/data1/common_datasets/ImageNet/train"
 IMAGENET_STATISTICS_PATH={
-    str(label): f"/nfs-shared/haowei/sharing/imagenet-1k-fid-stats-{label}.pt" for label in [111, 222, 333, 444]
+    str(label): f"./ckpts/imagenet-1k-fid-stats-{label}.pt" for label in [111, 222, 333, 444]
 }
+CIFAR10_STATICS_PATH={int(i): f"data/cifar10-fid-stats-{i}.pt" for i in range(10)}
 
 CELEBA_PATH="./data/celeba_hq_256"
 PARTIPROMPOTS_PATH="./data/partiprompts_1000.txt"
 WIKIART_PATH='./data/wikiart'
-MODEL_PATH='/nfs-shared/haowei/sharing'    # Your model path
+MODEL_PATH='./ckpts'    # Your model path
 COND_VALIDITY_PATH_MAPPING = {
     'google/vit-base-patch16-224': "facebook/deit-small-patch16-224",
     "facebook/deit-small-patch16-224": 'google/vit-base-patch16-224',

@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=0
+CUDA_VISIBLE_DEVICES=1
 data_type=image
 image_size=256
 dataset="bird-species"
@@ -14,8 +14,8 @@ eta=1.0
 clip_x0=True
 seed=42
 logging_dir='logs'
-per_sample_batch_size=2
-num_samples=2
+per_sample_batch_size=8
+num_samples=256
 logging_resolution=512
 guidance_name='tfg'
 eval_batch_size=2

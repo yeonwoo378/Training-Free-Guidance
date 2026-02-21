@@ -1,31 +1,36 @@
-CUDA_VISIBLE_DEVICES=0
+CUDA_VISIBLE_DEVICES=2
 data_type=image
-task=label_guidance_time
-image_size=32
-dataset="cifar10"
-model_name_or_path='openai_cifar10.pt'
-guide_network='timeclassifier_cifar10.pt'
+image_size=256
+dataset="imagenet"
+model_name_or_path='models/openai_imagenet.pt'
+
+task=label_guidance
+guide_network='google/vit-base-patch16-224'
+target=222
+
 train_steps=1000
-inference_steps=50
+inference_steps=100
 eta=1.0
-target=8
 clip_x0=True
 seed=42
 logging_dir='logs'
-per_sample_batch_size=128
-num_samples=128
+per_sample_batch_size=8
+num_samples=256
 logging_resolution=512
 guidance_name='tfg'
-guidance_strength=1.0
-eval_batch_size=512
+eval_batch_size=2
 wandb=False
 
+rho=2
+mu=0.5
+sigma=0.1
+eps_bsz=1
+iter_steps=4
 
 CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES python main.py \
     --data_type $data_type \
     --task $task \
     --image_size $image_size \
-    --guidance_strength $guidance_strength \
     --dataset $dataset \
     --guide_network $guide_network \
     --logging_resolution $logging_resolution \
@@ -33,8 +38,13 @@ CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES python main.py \
     --train_steps $train_steps \
     --inference_steps $inference_steps \
     --target $target \
+    --iter_steps $iter_steps \
     --eta $eta \
     --clip_x0 $clip_x0 \
+    --rho $rho \
+    --mu $mu \
+    --sigma $sigma \
+    --eps_bsz $eps_bsz \
     --wandb $wandb \
     --seed $seed \
     --logging_dir $logging_dir \

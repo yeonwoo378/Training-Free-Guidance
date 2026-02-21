@@ -37,6 +37,7 @@ class BaseGuidance:
         for recur_step in range(self.args.recur_steps):
     
             eps = unet(x, t)
+            # TODO add our algo in here
 
             # predict x0 using xt and epsilon
             x0 = self._predict_x0(x, eps, alpha_prod_t, **kwargs)
