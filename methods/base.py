@@ -1,6 +1,7 @@
 from diffusers.utils.torch_utils import randn_tensor
 from tasks.base import BaseGuider
 from utils.configs import Arguments
+
 import torch
 
 class BaseGuidance:
@@ -29,15 +30,35 @@ class BaseGuidance:
         eta: float,
         **kwargs,
     ) -> torch.Tensor:
-
+        from utils.utils import divergence_stepper
         alpha_prod_t = alpha_prod_ts[t]
         alpha_prod_t_prev = alpha_prod_t_prevs[t]
         t = ts[t]
 
         for recur_step in range(self.args.recur_steps):
     
-            eps = unet(x, t)
+            # eps = unet(x, t)
             # TODO add our algo in here
+            # predicting noise (..)
+            # should be opposite to our formulation
+            # but t direction is also opposite, we minimize the divergence of network output as usual.
+            v_func_kwargs = {
+                'x': x,
+                't': t
+            }
+            v_func = unet
+            x, eps, _, _ = divergence_stepper(v_func, 
+                                                    v_func_kwargs,
+                                                    x_key='x',
+                                                    t_key='t',
+                                                    stop_t=0.5,
+                                                    seed_delta=1234,
+                                                    seed_eps=42,
+                                                    delta=None,
+                                                    improved=None
+                                                    
+                                                    )
+
 
             # predict x0 using xt and epsilon
             x0 = self._predict_x0(x, eps, alpha_prod_t, **kwargs)

@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=2
+CUDA_VISIBLE_DEVICES=1
 data_type=image
 image_size=256
 dataset="cat"
@@ -13,12 +13,12 @@ inference_steps=100
 eta=1.0
 clip_x0=True
 seed=42
-logging_dir='logs'
-per_sample_batch_size=16
+logging_dir='logs_ours'
+per_sample_batch_size=4
 num_samples=256
 logging_resolution=512
 guidance_name='tfg'
-eval_batch_size=16
+eval_batch_size=4
 wandb=False
 
 rho=1

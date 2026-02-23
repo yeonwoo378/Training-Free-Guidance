@@ -6,6 +6,7 @@ wandb
 sweep_*
 __pycache__
 logs
+logs_ours
 
 data/celeba_hq_256/
 data/cifar-10-batches-py/

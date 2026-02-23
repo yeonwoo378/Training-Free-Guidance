@@ -1,5 +1,6 @@
 import torch
 import os
+import numpy as np
 from typing import Union
 from transformers import HfArgumentParser
 
@@ -130,3 +131,163 @@ def get_network(args):
         return AudioDiffusionSampler(args)
     else:
         raise NotImplementedError
+
+
+# @torch.no_grad()
+def divergence_stepper( v_func,
+                        v_func_kwargs,
+                        x_key='z',
+                        t_key='t',
+                        stop_t=0.5,
+                        num_updates=1,
+                        num_delta=1,
+                        num_eps=1,
+                        delta_scale=0.1,
+                        delta_scheduler=lambda t: 2 ** (-t),
+                        seed_delta=None,
+                        seed_eps=None,
+                        delta=None,
+                        improved=None,
+                        resample_delta=False,
+                        resample_eps=False,
+                        sequential_vjp=True,
+                        sequential_hutchinson=True,
+                        eta=0.0,
+                        sync_over_time=True
+                        ):
+    assert stop_t >= 0.0 and stop_t <= 1.0
+
+    t = v_func_kwargs[t_key]
+    # import ipdb; ipdb.set_trace()
+    # if isinstance(t, torch.Tensor):
+    # t is long 
+        # assert (t == t.mean()).all().item(), "All timesteps in the batch must be the same for divergence_stepper."
+    t = 1. - (t+1)/1000
+    # import ipdb; ipdb.set_trace()
+    if num_updates <= 0 or t > stop_t:
+        return v_func_kwargs[x_key], v_func(**v_func_kwargs), improved, delta
+    # import ipdb; ipdb.set_trace()
+    z = v_func_kwargs[x_key]        
+    B = z.shape[0]
+    D = np.prod(z.shape[1:])  # C * H * W
+    
+    delta_generator = None
+    eps_generator = None
+    
+    if seed_delta is not None:
+        if sync_over_time:
+            delta_generator = torch.Generator(device=z.device).manual_seed(seed_delta) # + int(t * 1000))
+        else:
+            delta_generator = torch.Generator(device=z.device).manual_seed(seed_delta + int(t * 1000))
+    if seed_eps is not None:
+        eps_generator = torch.Generator(device=z.device).manual_seed(seed_eps)
+    sync_eps_with_delta = num_eps == 1 and seed_eps == seed_delta
+    
+    for update_idx in range(num_updates):
+        require_sample_delta = (update_idx == 0) or resample_delta
+        require_sample_eps = (update_idx == 0) or resample_eps
+
+        # compute divergence and find the best perturbation
+        if sequential_vjp:
+            assert (not resample_delta) or (num_delta==1)
+            for delta_idx in range(num_delta+1):
+
+                # pass if no need to get the divergence of original z
+                # if delta_idx == 0 and update_idx !=0: # buggy
+                #     continue
+                # import ipdb; ipdb.set_trace()
+                if delta is None or improved is None:
+                    assert improved is None and delta_idx <= 1
+                    delta = torch.randn(z.shape, generator=delta_generator, device=z.device) # if delta_idx != 0 else torch.zeros_like(z, device=z.device)
+                elif update_idx > 0:
+                    temp_delta_generator = torch.Generator(device=z.device).manual_seed(seed_delta + update_idx)
+                    temp_delta = torch.randn(z.shape, generator=temp_delta_generator, device=z.device)
+                    pass
+                elif delta_idx > 0:
+                    new_delta = torch.randn(z.shape, generator=delta_generator, device=z.device) #if delta_idx != 0 else torch.zeros_like(z, device=z.device)
+                    delta = torch.where(
+                        improved.reshape(-1, *([1]*(z.ndim-1))), # hard-coded shape
+                        delta, # True
+                        new_delta # False
+                    )
+                # no update delta when delta_idx=0
+                assert seed_delta != seed_eps, "Is a Biased Estimator"
+
+                if sync_eps_with_delta and delta_idx != 0:
+                    eps = delta.detach()
+                    raise NotImplementedError # not using anymore!
+
+                else:
+                    eps = torch.randn(z.shape, generator=eps_generator, device=z.device) 
+
+                if delta_idx == 0:
+                    perturbed_z = z 
+                elif update_idx == 0:
+                    perturbed_z = z + delta_scale * (1. - t) * delta_scheduler(update_idx) * delta # TODO: clarify
+                else:
+                    perturbed_z = z + delta_scale * (1. - t) * delta_scheduler(update_idx) * temp_delta # TODO: clarify
+                with torch.enable_grad():
+                    perturbed_z = perturbed_z.detach().requires_grad_(True)
+                    v_func_kwargs[x_key] = perturbed_z
+                    
+                    v_pred = v_func(**v_func_kwargs)  # [B, C, H, W]
+                    v_pred_eps = (v_pred * eps).flatten(1).sum(1)  # [B]
+                    grad_v = torch.autograd.grad(
+                        outputs=v_pred_eps,          # [B]
+                        inputs=perturbed_z,                      # [B, C, H, W]
+                        grad_outputs=torch.ones_like(v_pred_eps),  # [B]
+                        create_graph=False,
+                        retain_graph=False,         
+                    )[0].detach()  # [B, C, H, W]
+                    divergence = (grad_v * eps).flatten(1).sum(1) / D  # [B]
+                
+                threshold = - (1 / (1 - t))
+
+                if delta_idx == 0:
+                    best_divergence = divergence.detach()
+                    best_v_pred = v_pred.detach()
+                    best_perturbed_z = perturbed_z.detach()
+                elif update_idx == 0:
+                    improved = (divergence < (best_divergence - eta)) & (best_divergence >= threshold)
+                    improved_shape = (B,) + (1,) * (len(z.shape) - 1)
+                    best_divergence = torch.where(improved, divergence, best_divergence)
+                    best_v_pred = torch.where(
+                        improved.view(improved_shape),
+                        v_pred,
+                        best_v_pred,
+                    )
+                    # print(improved.view(improved_shape).shape)
+                    best_perturbed_z = torch.where(
+                        improved.view(improved_shape),
+                        perturbed_z.detach(),
+                        best_perturbed_z,
+                    )
+                else:
+                    temp_improved = (divergence < (best_divergence - eta)) & (best_divergence >= threshold)
+                    improved_shape = (B,) + (1,) * (len(z.shape) - 1)
+                    best_divergence = torch.where(temp_improved, divergence, best_divergence)
+                    best_v_pred = torch.where(
+                        temp_improved.view(improved_shape),
+                        v_pred,
+                        best_v_pred,
+                    )
+                    # print(improved.view(improved_shape).shape)
+                    best_perturbed_z = torch.where(
+                        temp_improved.view(improved_shape),
+                        perturbed_z.detach(),
+                        best_perturbed_z,
+                    )
+
+                    # improved = improved & temp_improved
+
+            # update iteration-wise
+            z = best_perturbed_z # update z
+            v_pred = best_v_pred
+        
+        # currently not using hereafter
+        else:
+            # build delta
+            raise NotImplementedError
+           
+    return best_perturbed_z, best_v_pred, improved, delta
+

@@ -68,15 +68,19 @@ class ImageSampler(BaseSampler):
                 generator=self.generator,
                 device=self.device,
             )
-
+            improved = None
+            delta = None
             for t in tqdm(range(self.inference_steps), total=self.inference_steps):
                 
-                x = guidance.guide_step(
+                x, improved, delta = guidance.guide_step(
                     x, t, self.unet,
                     self.ts,
                     self.alpha_prod_ts, 
                     self.alpha_prod_t_prevs,
                     self.eta,
+                    delta=delta,
+                    improved=improved
+
                 )
 
                 # we may want to log some trajs

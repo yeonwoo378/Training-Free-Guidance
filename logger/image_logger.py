@@ -28,8 +28,8 @@ class ImageLogger(BaseLogger):
     def log_samples(self, images, fname='images'):
         import math
         nrow = ncol = math.ceil(min(len(images), self.max_show_images) ** 0.5)
-        os.makedirs(f'{self.logging_dir}/gen_images')
-        # save all image 
+        os.makedirs(f'{self.logging_dir}/gen_images', exist_ok=True)
+        
         for i, image in enumerate(images):
             image.save(os.path.join(self.logging_dir, f"gen_images/{str(i).zfill(4)}.png"))
         

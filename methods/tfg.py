@@ -7,7 +7,7 @@ import torch
 from functools import partial
 
 from tasks.utils import rescale_grad
-
+# from utils.utils import divergence_stepper
 
 class TFGGuidance(BaseGuidance):
 
@@ -82,8 +82,11 @@ class TFGGuidance(BaseGuidance):
         alpha_prod_ts: torch.Tensor,
         alpha_prod_t_prevs: torch.Tensor,
         eta: float,
+        improved=None,
+        delta=None,
         **kwargs,
     ) -> torch.Tensor:
+        from utils.utils import divergence_stepper
         alpha_prod_t = alpha_prod_ts[t]
         alpha_prod_t_prev = alpha_prod_t_prevs[t]
 
@@ -92,16 +95,54 @@ class TFGGuidance(BaseGuidance):
         std = self.get_std(t, alpha_prod_ts, alpha_prod_t_prevs)
 
         t = ts[t]   # convert from int space to tensor space
-
+        
         for recur_step in range(self.args.recur_steps):
 
             # sample noise to estimate the \tilde p distribution
             mc_eps = self.get_noise(std, x.shape, self.args.eps_bsz, **kwargs)
 
             # Compute guidance on x_t, and obtain Delta_t
+
+            # v_func_kwargs = {
+            #     'x': x,
+            #     't': t
+            # }
+            # v_func = unet
+            # x, eps, _, _ = divergence_stepper(v_func, 
+            #                                         v_func_kwargs,
+            #                                         x_key='x',
+            #                                         t_key='t',
+            #                                         stop_t=0.5,
+            #                                         seed_delta=1234,
+            #                                         seed_eps=42,
+            #                                         delta=None,
+            #                                         improved=None
+                                                    
+            #                                         )
+
             if rho != 0.0:
                 with torch.enable_grad():
                     x_g = x.clone().detach().requires_grad_()
+                    # eps = unet(x_g, t)
+
+                    # v_func = unet
+                    v_func_kwargs = {
+                        'x': x_g,
+                        # 'timestep': t,
+                        't': t,
+                    }
+                    v_func = unet
+                    x_g, eps, improved, delta = divergence_stepper(v_func, 
+                                                        v_func_kwargs,
+                                                        x_key='x',
+                                                        # t_key='timestep',
+                                                        t_key='t',
+                                                        stop_t=0.5,
+                                                        seed_delta=1234,
+                                                        seed_eps=42,
+                                                        delta=delta,
+                                                        improved=improved)
+                    x_g = x_g.detach().requires_grad_()
                     x0 = self._predict_x0(x_g, unet(x_g, t), alpha_prod_t, **kwargs)
 
                     logprobs = self.tilde_get_guidance(
@@ -112,7 +153,27 @@ class TFGGuidance(BaseGuidance):
                     
             else:
                 Delta_t = torch.zeros_like(x)
-                x0 = self._predict_x0(x, unet(x, t), alpha_prod_t, **kwargs)
+                eps = unet(x, t)
+
+                v_func = unet
+                v_func_kwargs = {
+                    'x': x,
+                    # 'timestep': t,
+                    't':t
+                }
+                v_func = unet
+                x, eps, improved, delta = divergence_stepper(v_func, 
+                                                    v_func_kwargs,
+                                                    x_key='x',
+                                                    # t_key='timestep',
+                                                    t_key='t',
+                                                    stop_t=0.5,
+                                                    seed_delta=1234,
+                                                    seed_eps=42,
+                                                    delta=delta,
+                                                    improved=improved)
+                eps = unet(x, t)
+                x0 = self._predict_x0(x, eps, alpha_prod_t, **kwargs)
 
             # Compute guidance on x_{0|t}
             new_x0 = x0.clone().detach()
@@ -130,4 +191,4 @@ class TFGGuidance(BaseGuidance):
 
             x = self._predict_xt(x_prev, alpha_prod_t, alpha_prod_t_prev, **kwargs).detach().requires_grad_(False)
         
-        return x_prev
+        return x_prev, improved, delta
